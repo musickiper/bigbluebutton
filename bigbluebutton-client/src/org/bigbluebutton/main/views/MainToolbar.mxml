@@ -91,6 +91,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			import org.bigbluebutton.main.model.users.events.ConferenceCreatedEvent;
 			import org.bigbluebutton.main.model.users.events.ConnectionFailedEvent;
 			import org.bigbluebutton.modules.users.model.UsersOptions;
+			import org.bigbluebutton.util.browser.BrowserCheck;
 			import org.bigbluebutton.util.i18n.ResourceUtil;
 
 			private static const LOGGER:ILogger = getClassLogger(MainToolbar);
@@ -223,6 +224,20 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 				initBanner();
 
 				logFlashPlayerCapabilities();
+				logBrowserInfo();
+			}
+			
+			private function logBrowserInfo():void {
+				var browser:Object = new Object();
+				browser.name = BrowserCheck.browserName;
+				browser.majorVersion = BrowserCheck.browserMajorVersion;
+				browser.fullVersion = BrowserCheck.browserFullVersion;
+				
+				var logData:Object = UsersUtil.initLogData();
+				logData.tags = ["initialization"];
+				logData.browser = browser;
+				logData.logCode = "browser_info";
+				LOGGER.info(JSON.stringify(logData));
 			}
 	
 			private function initBanner() : void {
@@ -243,7 +258,13 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			}
 
       private function refreshModeratorButtonsVisibility(e:*):void {
+<<<<<<< HEAD
           showRecordButton = LiveMeeting.inst().meeting.recorded && UsersUtil.amIModerator();
+=======
+          showGuestSettingsButton = UsersUtil.amIModerator() && usersOptions.enableGuestUI;
+
+          showRecordButton = LiveMeeting.inst().meeting.recorded;
+>>>>>>> upstream/v2.0.x-release
       }
 
       private function getFlashPlayerCapabilities():Object {
@@ -285,7 +306,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
          var logData:Object = UsersUtil.initLogData();
          logData.tags = ["initialization"];
          logData.capabilities = getFlashPlayerCapabilities();
-         logData.message = "Flash Player Capabilities.";
+         logData.logCode = "flash_player_capabilities";
          LOGGER.info(JSON.stringify(logData));
      }
 

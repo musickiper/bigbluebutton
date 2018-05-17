@@ -1,12 +1,14 @@
 import { Meteor } from 'meteor/meteor';
 import Langmap from 'langmap';
+import Users from '/imports/api/users';
 import fs from 'fs';
 import Logger from './logger';
 import Redis from './redis';
 
 Meteor.startup(() => {
   const APP_CONFIG = Meteor.settings.public.app;
-  Logger.info(`SERVER STARTED. DEV_ENV=${Meteor.isDevelopment} PROD_ENV=${Meteor.isProduction}`, APP_CONFIG);
+  const env = Meteor.isDevelopment ? 'development' : 'production';
+  Logger.warn(`SERVER STARTED. ENV=${env}, nodejs version=${process.version}`, APP_CONFIG);
 });
 
 WebApp.connectHandlers.use('/check', (req, res) => {
@@ -71,6 +73,37 @@ WebApp.connectHandlers.use('/locales', (req, res) => {
   res.writeHead(200);
   res.end(JSON.stringify(availableLocales));
 });
+
+WebApp.connectHandlers.use('/feedback', (req, res) => {
+  req.on('data', Meteor.bindEnvironment((data) => {
+    const body = JSON.parse(data);
+    const {
+      meetingId,
+      userId,
+      authToken,
+    } = body;
+
+    const user = Users.findOne({
+      meetingId,
+      userId,
+      connectionStatus: 'offline',
+      authToken,
+    });
+
+    const feedback = {
+      userName: user.name,
+      ...body,
+    };
+    Logger.info('FEEDBACK LOG:', feedback);
+  }));
+
+  req.on('end', Meteor.bindEnvironment(() => {
+    res.setHeader('Content-Type', 'application/json');
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: 'ok' }));
+  }));
+});
+
 
 export const eventEmitter = Redis.emitter;
 

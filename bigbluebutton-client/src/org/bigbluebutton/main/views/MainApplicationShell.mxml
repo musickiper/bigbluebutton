@@ -54,6 +54,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 		<mate:Listener type="{WebRTCCallEvent.WEBRTC_CALL_ENDED}" method="handleWebRTCCallEndedEvent" />
 		<mate:Listener type="{AudioSelectionWindowEvent.SHOW_AUDIO_SELECTION}" method="handleShowAudioSelectionWindowEvent" />
 		<mate:Listener type="{ShareCameraRequestEvent.SHARE_CAMERA_REQUEST}" method="handleShareCameraRequestEvent" />
+		<mate:Listener type="{ScreenshareSelectionWindowEvent.SHOW_WINDOW}" method="handleShowScreenshareSelection" />
 	  
 		<mate:Listener type="{ToolbarButtonEvent.ADD}" method="handleAddToolbarComponent" />	
 		<mate:Listener type="{ToolbarButtonEvent.REMOVE}" method="handleRemoveToolbarComponent"/>
@@ -86,14 +87,14 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			import flash.events.TextEvent;
 			import flash.utils.setTimeout;
 			
+			import flexlib.mdi.effects.effectsLib.MDIVistaEffects;
+			
 			import mx.binding.utils.ChangeWatcher;
 			import mx.collections.ArrayCollection;
 			import mx.core.FlexGlobals;
 			import mx.core.IFlexDisplayObject;
 			import mx.core.UIComponent;
 			import mx.events.FlexEvent;
-			
-			import flexlib.mdi.effects.effectsLib.MDIVistaEffects;
 			
 			import org.as3commons.lang.StringUtils;
 			import org.as3commons.logging.api.ILogger;
@@ -138,6 +139,8 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			import org.bigbluebutton.modules.phone.events.WebRTCEchoTestEvent;
 			import org.bigbluebutton.modules.phone.events.WebRTCMediaEvent;
 			import org.bigbluebutton.modules.phone.models.PhoneOptions;
+			import org.bigbluebutton.modules.screenshare.events.ScreenshareSelectionWindowEvent;
+			import org.bigbluebutton.modules.screenshare.view.components.ScreenshareSelectionWindow;
 			import org.bigbluebutton.modules.users.model.UsersOptions;
 			import org.bigbluebutton.modules.users.views.BreakoutRoomSettings;
 			import org.bigbluebutton.modules.videoconf.events.ShareCameraRequestEvent;
@@ -295,6 +298,18 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 				if (heightWatch != null) heightWatch.unwatch();
 			}
 			
+<<<<<<< HEAD
+=======
+			private function setGuestPolicy(event:BBBEvent):void {
+				guestPolicy = event.payload.guestPolicy;
+				if(guestManagement == null) {
+					guestManagement = new GuestManagement();
+					guestManagement.setGuestPolicy(guestPolicy);
+					guestManagement.addToSettings();
+				}
+			}
+
+>>>>>>> upstream/v2.0.x-release
 			private function updateCopyrightLabelDimensions(e:Event = null):void {
 				var appWidth:Number = parentApplication.width;
 				
@@ -319,6 +334,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 				mdiCanvas.height = appHeight - (_showFooter ? footerHeight: 0) - (_showToolbar ? toolbarHeight: 0);
 				updateCanvasBackgroundDimensions();
 			}
+<<<<<<< HEAD
 
 			private function handleApplicationVersionEvent(event:AppVersionEvent):void {
 				var logData:Object = UsersUtil.initLogData();
@@ -331,10 +347,42 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 
 				logData.message = "Received application version event";
 				sendStartAllModulesEvent();
+=======
+			
+			private function handleApplicationVersionEvent(event:AppVersionEvent):void {
+                var logData:Object = UsersUtil.initLogData();
+                
+				if (event.configLocaleVersion == true) {
+					receivedConfigLocaleVer = true;
+					appVersion = event.appVersion;
+					localeVersion = event.localeVersion;
+          updateCopyrightText();
+          
+                    logData.localeVersion = localeVersion;
+                    logData.tags = ["locale"];
+                    logData.appVersion = appVersion;
+                    logData.logCode = "config_xml_locale_version";
+                    LOGGER.info(JSON.stringify(logData));
+				} else {
+					receivedResourceLocaleVer = true;
+
+                    logData.tags = ["locale"];
+                    logData.logCode = "locale_file_locale_version";
+                    LOGGER.info(JSON.stringify(logData));
+				}
+				
+				if (receivedConfigLocaleVer && receivedResourceLocaleVer) {
+					if (!event.suppressLocaleWarning) checkLocaleVersion(localeVersion);
+					if (sendStartModulesEvent) {
+            
+						sendStartModulesEvent = false;
+						sendStartAllModulesEvent();
+					}				
+				}						
+>>>>>>> upstream/v2.0.x-release
 			}
 
 			public function sendStartAllModulesEvent():void{
-				LOGGER.debug("Sending start all modules event");
 				var dispatcher:Dispatcher = new Dispatcher();
 				dispatcher.dispatchEvent(new ModuleLoadEvent(ModuleLoadEvent.START_ALL_MODULES));	
 			}
@@ -376,7 +424,6 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 
 			private function closeWaitWindow(e:BBBEvent):void {
 				if(waitWindow != null && e.payload.type == "BIGBLUEBUTTON_CONNECTION") {
-					LOGGER.debug("closeWaitWindow");
 					waitWindow.removeWindow();
 				}
 			}
@@ -419,7 +466,6 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			}
 
 			private function toggleFullScreen():void{
-				LOGGER.debug("Toggling fullscreen");
 				if (ExternalInterface.available) {
 					ExternalInterface.call("toggleFullscreen");
 				}
@@ -496,12 +542,35 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 	   			mdiCanvas.addChild(e.component);
 	   		}
 	   		
+<<<<<<< HEAD
 			private function handleUserInactivityAuditEvent(e:BBBEvent):void {
 				var inactivityWarning:UserInactivityAuditWindow = PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, 
 					UserInactivityAuditWindow, true) as UserInactivityAuditWindow;
 				inactivityWarning.duration = e.payload.duration;
 			}
 			
+=======
+	   		public function checkLocaleVersion(localeVersion:String):void {	   			
+	   			Alert.okLabel ="OK";
+				var version:String = "old-locales";
+				version = ResourceUtil.getInstance().getString('bbb.mainshell.locale.version');
+                
+                var logData:Object = UsersUtil.initLogData();
+                logData.configVersion = localeVersion;
+                logData.localeVersion = version;
+                logData.locale = ResourceUtil.getInstance().getCurrentLanguageCode();
+                logData.tags = ["locale"];
+                logData.logCode = "locale_loaded";
+                LOGGER.info(JSON.stringify(logData));
+                    
+				if ((version == "old-locales") || StringUtils.isEmpty(version)) {
+					wrongLocaleVersion();
+				} else {
+					if (version != localeVersion) wrongLocaleVersion();
+				}	   			
+	   		}
+
+>>>>>>> upstream/v2.0.x-release
 			private function handleInactivityWarningEvent(e:BBBEvent):void {
 				var inactivityWarning:InactivityWarningWindow = PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, InactivityWarningWindow, true) as InactivityWarningWindow;
 				inactivityWarning.duration = e.payload.duration;
@@ -543,21 +612,20 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
                 var browserPermissionHelper:BrowserPermissionHelper = PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, BrowserPermissionHelper, false) as BrowserPermissionHelper;
                 if (BrowserCheck.isFirefox()) {
                     if (browserPermissionHelper) {
-						if (Capabilities.os.indexOf("Mac") >= 0){
-							browserPermissionHelper.currentState = "firefoxMicMacOSX";
-						}
-						else {
+						if (Capabilities.os.indexOf("Windows") >= 0) {
 							browserPermissionHelper.currentState = "firefoxMic";
+						} else {
+							browserPermissionHelper.currentState = "firefoxMicMacOSX";
 						}
 						browserPermissionHelper.x = 50;
 						browserPermissionHelper.y = 200;
                     }
                 } else if (BrowserCheck.isChrome()) {
                     if (browserPermissionHelper) {
-						if (Capabilities.os.indexOf("Mac") >= 0){
-							browserPermissionHelper.currentState = "chromeMicMacOSX";
-						} else {
+						if (Capabilities.os.indexOf("Windows") >= 0) {
 							browserPermissionHelper.currentState = "chromeMic";
+						} else {
+							browserPermissionHelper.currentState = "chromeMicMacOSX";
 						}
 						browserPermissionHelper.x = 50;
 						browserPermissionHelper.y = 130;
@@ -575,6 +643,10 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
                     setTimeout(showbrowserPermissionHelper, 100);
                 }
             }
+			
+			private function handleShowScreenshareSelection(event:ScreenshareSelectionWindowEvent):void {
+				PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, ScreenshareSelectionWindow, true);
+			}
 			
 			private function showbrowserPermissionHelper() : void {
 				var browserPermissionHelper : BrowserPermissionHelper = PopUpUtil.createNonModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, BrowserPermissionHelper, false) as BrowserPermissionHelper;
@@ -597,6 +669,46 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
                 this.removeChild(toolbar);
                 this.removeChild(controlBar);
             }
+<<<<<<< HEAD
+=======
+
+            private function handleLogout(e:ConnectionFailedEvent):void {
+                if (e is ConnectionFailedEvent) {
+                    showlogoutWindow((e as ConnectionFailedEvent).type);
+                } else
+                    showlogoutWindow(ConnectionFailedEvent.USER_EJECTED_FROM_MEETING);
+            }
+
+            private function handleExitApplicationEvent(e:ExitApplicationEvent = null):void {
+                if (! UsersUtil.isBreakout()) {
+                    navigateToURL(new URLRequest(BBB.getLogoutURL()), "_self");
+                } else {
+                    ExternalInterface.call("window.close");
+                }
+            }
+
+			private function redirectToLogoutUrl ():void {
+        		var logoutURL:String = BBB.getLogoutURL();
+				var request:URLRequest = new URLRequest(logoutURL);
+
+				navigateToURL(request, '_self');
+			}
+			
+
+			private function handleLogoutError(e:Event):void {
+
+				redirectToLogoutUrl();
+			}
+			
+			private function handleLogoutComplete(e:Event):void {	
+
+				redirectToLogoutUrl();
+			}
+			
+			private function attemptReconnect(e:ConnectionFailedEvent):void{
+				handleLogout(e);
+			}
+>>>>>>> upstream/v2.0.x-release
 			
 			private function handleAddToolbarComponent(event:ToolbarButtonEvent):void {
 				if (event.location == ToolbarButtonEvent.BOTTOM_TOOLBAR) {

@@ -78,6 +78,13 @@ def repair_red5_ser(directory)
   end
 end
 
+def check_recording_events(raw_dir, meeting_id)
+  duration = BigBlueButton::Events.get_recording_length("#{raw_dir}/#{meeting_id}/events.xml")
+  if duration == 0
+    raise Exception, "Duration of recorded portion of meeting is 0. You must edit the RecordStatusEvent events in #{raw_dir}/#{meeting_id}/events.xml before this meeting can be processed."
+  end
+end
+
 
 # Determine the filenames for the done and fail files
 if !break_timestamp.nil?
@@ -90,6 +97,7 @@ sanity_fail_file = "#{recording_dir}/status/sanity/#{done_base}.fail"
 
 
 begin
+<<<<<<< HEAD
   logger.info("Starting sanity check for recording #{meeting_id}")
   if !break_timestamp.nil?
     logger.info("Break timestamp is #{break_timestamp}")
@@ -110,6 +118,23 @@ begin
     logger.info("Deleting keys")
     redis = BigBlueButton::RedisWrapper.new(redis_host, redis_port)
     events_archiver = BigBlueButton::RedisEventsArchiver.new(redis)
+=======
+	BigBlueButton.logger.info("Starting sanity check for recording #{meeting_id}.")
+	BigBlueButton.logger.info("Checking events.xml")
+	check_events_xml(raw_archive_dir,meeting_id)
+        BigBlueButton.logger.info("Checking recording events")
+        check_recording_events(raw_archive_dir, meeting_id)
+	BigBlueButton.logger.info("Checking audio")
+	check_audio_files(raw_archive_dir,meeting_id)
+    BigBlueButton.logger.info("Checking webcam videos")
+    check_webcam_files(raw_archive_dir,meeting_id)
+    BigBlueButton.logger.info("Checking deskshare videos")
+    check_deskshare_files(raw_archive_dir,meeting_id)
+	#delete keys
+	BigBlueButton.logger.info("Deleting keys")
+	redis = BigBlueButton::RedisWrapper.new(redis_host, redis_port)
+	events_archiver = BigBlueButton::RedisEventsArchiver.new redis    
+>>>>>>> upstream/v2.0.x-release
     events_archiver.delete_events(meeting_id)
   end
 

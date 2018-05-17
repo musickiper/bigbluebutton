@@ -5,8 +5,9 @@
       "mobileFont": 16,
       "desktopFont": 14,
       "audioChatNotification": false,
-      "autoJoinAudio": true,
-      "listenOnly": false,
+      "autoJoin": true,
+      "listenOnlyMode": true,
+      "forceListenOnly": false,
       "skipCheck": false,
       "appName": "BigBlueButton HTML5 Client",
       "bbbServerVersion": "2.0-rc",
@@ -14,6 +15,7 @@
       "html5ClientBuild": "HTML5_CLIENT_VERSION",
       "lockOnJoin": true,
       "basename": "/html5client",
+      "askForFeedbackOnLogout": false,
       "defaultSettings": {
         "application": {
           "chatAudioNotifications": false,
@@ -25,8 +27,9 @@
           "inputDeviceId": "undefined",
           "outputDeviceId": "undefined"
         },
-        "video": {
-          "viewParticipantsWebcams": true
+        "dataSaving": {
+          "viewParticipantsWebcams": true,
+          "viewScreenshare": true
         },
         "cc": {
           "backgroundColor": "#FFFFFF",
@@ -45,6 +48,21 @@
           "layout": false
         }
       },
+      "shortcuts": {
+        "openOptions": {"accesskey": "O", "descId": "openOptions"},
+        "toggleUserList": {"accesskey": "U", "descId": "toggleUserList"},
+        "toggleMute": {"accesskey": "M", "descId": "toggleMute"},
+        "joinAudio": {"accesskey": "J", "descId": "joinAudio"},
+        "leaveAudio": {"accesskey": "L", "descId": "leaveAudio"},
+        "togglePublicChat": {"accesskey": "P", "descId": "togglePublicChat"},
+        "hidePrivateChat": {"accesskey": "H", "descId": "hidePrivateChat"},
+        "closePrivateChat": {"accesskey": "G", "descId": "closePrivateChat"},
+        "openActions": {"accesskey": "A", "descId": "openActions"},
+        "openStatus": {"accesskey": "S", "descId": "openStatus"}
+      },
+      "branding": {
+        "displayBrandingArea": false
+      },
       "allowHTML5Moderator": true,
       "allowModeratorToUnmuteAudio": true,
       "httpsConnection": false,
@@ -53,6 +71,8 @@
 
     "kurento": {
       "wsUrl": "HOST",
+      "chromeDefaultExtensionKey": "akgoaoikmbmhcopjgakkcepdgdgkjfbc",
+      "chromeDefaultExtensionLink": "https://chrome.google.com/webstore/detail/bigbluebutton-screenshare/akgoaoikmbmhcopjgakkcepdgdgkjfbc",
       "chromeExtensionKey": "KEY",
       "chromeExtensionLink": "LINK",
       "enableScreensharing": false,
@@ -95,7 +115,8 @@
           "toggleVoice",
           "clearPublicChatHistory",
           "changeRole",
-          "ejectUserFromVoice"
+          "ejectUserFromVoice",
+          "toggleRecording"
         ]
       },
       "presenter": {
@@ -308,8 +329,8 @@
             "value": "pencil"
           },
           {
-            "icon": "hand",
-            "value": "hand"
+            "icon": "pointer",
+            "value": "pointer"
           }
         ]
       }
@@ -327,7 +348,7 @@
       "host": "127.0.0.1",
       "post": "6379",
       "timeout": 5000,
-      "debug": false,
+      "debug": true,
       "channels": {
         "toAkkaApps": "to-akka-apps-redis-channel"
       },
@@ -346,7 +367,6 @@
 
 
     "log": {
-      "filename": "/log/development.log",
       "level": "info"
     }
   }

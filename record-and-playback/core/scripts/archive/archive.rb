@@ -65,6 +65,7 @@ def archive_directory(source, dest)
   end
 end
 
+<<<<<<< HEAD
 def archive_has_recording_marks?(meeting_id, raw_archive_dir, break_timestamp)
   doc = Nokogiri::XML(File.open("#{raw_archive_dir}/#{meeting_id}/events.xml"))
 
@@ -95,6 +96,50 @@ def archive_has_recording_marks?(meeting_id, raw_archive_dir, break_timestamp)
   end
   BigBlueButton.logger.info("Recording marks found: #{has_recording_marks}")
   has_recording_marks
+=======
+def archive_kurento_screenshare(meeting_id, screenshare_dir, raw_archive_dir)
+  BigBlueButton.logger.info("Archiving WebRTC screenshare for #{meeting_id}.")
+  begin
+    deskshare_dest_dir = "#{raw_archive_dir}/#{meeting_id}/deskshare"
+    FileUtils.mkdir_p(deskshare_dest_dir)
+    Dir.glob("#{screenshare_dir}/#{meeting_id}/*").each do |file|
+      BigBlueButton.logger.debug("#{file} to #{deskshare_dest_dir}")
+      FileUtils.cp(file, deskshare_dest_dir)
+    end
+  end
+end
+
+def archive_presentation(meeting_id, presentation_dir, raw_archive_dir)
+  BigBlueButton.logger.info("Archiving presentation for #{meeting_id}.")
+  begin
+    presentation_dest_dir = "#{raw_archive_dir}/#{meeting_id}/presentation"
+    FileUtils.mkdir_p presentation_dest_dir
+    BigBlueButton::PresentationArchiver.archive(meeting_id, "#{presentation_dir}/#{meeting_id}/#{meeting_id}", presentation_dest_dir)
+  rescue => e
+    BigBlueButton.logger.warn("Failed to archive presentations for #{meeting_id}. " + e.to_s)
+  end
+end
+
+def archive_has_recording_marks?(meeting_id, raw_archive_dir)
+  BigBlueButton.logger.info("Fetching the recording marks for #{meeting_id}.")
+
+  # No recording events at all
+  record_events = BigBlueButton::Events.get_record_status_events("#{raw_archive_dir}/#{meeting_id}/events.xml")
+  BigBlueButton.logger.info("record_events:\n#{BigBlueButton.hash_to_str(record_events)}")
+  if record_events.empty?
+    return false
+  end
+
+  # Recorded section of meeting has 0 length
+  duration = BigBlueButton::Events.get_recording_length("#{raw_archive_dir}/#{meeting_id}/events.xml")
+  BigBlueButton.logger.info("record duration: #{duration}")
+  if duration == 0
+    return false
+  end
+
+  # There's recording events, process it
+  return true
+>>>>>>> upstream/v2.0.x-release
 end
 
 
@@ -121,6 +166,8 @@ redis_host = props['redis_host']
 redis_port = props['redis_port']
 presentation_dir = props['raw_presentation_src']
 video_dir = props['raw_video_src']
+kurento_video_dir = props['kurento_video_src']
+kurento_screenshare_dir = props['kurento_screenshare_src']
 log_dir = props['log_dir']
 
 # Determine the filenames for the done and fail files
@@ -135,6 +182,7 @@ archive_norecord_file = "#{recording_dir}/status/archived/#{done_base}.norecord"
 BigBlueButton.logger = Logger.new("#{log_dir}/archive-#{meeting_id}.log", 'daily' )
 
 target_dir = "#{raw_archive_dir}/#{meeting_id}"
+<<<<<<< HEAD
 FileUtils.mkdir_p target_dir
 archive_events(meeting_id, redis_host, redis_port, raw_archive_dir, break_timestamp)
 archive_audio(meeting_id, audio_dir, raw_archive_dir)
@@ -150,6 +198,23 @@ if not archive_has_recording_marks?(meeting_id, raw_archive_dir, break_timestamp
 
   if break_timestamp.nil?
     # we need to delete the keys here because the sanity phase might not
+=======
+if not FileTest.directory?(target_dir)
+  FileUtils.mkdir_p target_dir
+  archive_events(meeting_id, redis_host, redis_port, raw_archive_dir)
+  archive_audio(meeting_id, audio_dir, raw_archive_dir)
+  archive_presentation(meeting_id, presentation_dir, raw_archive_dir)
+  archive_deskshare(meeting_id, deskshare_dir, raw_archive_dir)
+  archive_screenshare(meeting_id, screenshare_dir, raw_archive_dir)
+  archive_kurento_screenshare(meeting_id, kurento_screenshare_dir, raw_archive_dir)
+  archive_video(meeting_id, video_dir, raw_archive_dir)
+  archive_video(meeting_id, kurento_video_dir, raw_archive_dir)
+
+  if not archive_has_recording_marks?(meeting_id, raw_archive_dir)
+    BigBlueButton.logger.info("There's no recording marks for #{meeting_id}, not processing recording.")
+
+    # we need to delete the keys here because the sanity phase won't
+>>>>>>> upstream/v2.0.x-release
     # automatically happen for this recording
     BigBlueButton.logger.info("Deleting redis keys")
     redis = BigBlueButton::RedisWrapper.new(redis_host, redis_port)

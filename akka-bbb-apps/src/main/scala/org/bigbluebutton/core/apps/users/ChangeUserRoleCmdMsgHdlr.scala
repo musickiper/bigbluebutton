@@ -1,7 +1,7 @@
 package org.bigbluebutton.core.apps.users
 
 import org.bigbluebutton.common2.msgs._
-import org.bigbluebutton.core.models.{ Roles, Users2x }
+import org.bigbluebutton.core.models.{ RegisteredUsers, Roles, Users2x }
 import org.bigbluebutton.core.running.{ LiveMeeting, OutMsgRouter }
 import org.bigbluebutton.core.apps.{ PermissionCheck, RightsManagementTrait }
 
@@ -12,6 +12,7 @@ trait ChangeUserRoleCmdMsgHdlr extends RightsManagementTrait {
   val outGW: OutMsgRouter
 
   def handleChangeUserRoleCmdMsg(msg: ChangeUserRoleCmdMsg) {
+<<<<<<< HEAD
     if (permissionFailed(PermissionCheck.MOD_LEVEL, PermissionCheck.VIEWER_LEVEL, liveMeeting.users2x, msg.header.userId)) {
       val meetingId = liveMeeting.props.meetingProp.intId
       val reason = "No permission to change user role in meeting."
@@ -33,6 +34,22 @@ trait ChangeUserRoleCmdMsgHdlr extends RightsManagementTrait {
           outGW.send(event)
         }
       }
+=======
+    for {
+      uvo <- Users2x.changeRole(liveMeeting.users2x, msg.body.userId, msg.body.role)
+    } yield {
+      val userRole = if (uvo.role == Roles.MODERATOR_ROLE) "MODERATOR" else "VIEWER"
+      for {
+        // Update guest from waiting list
+        u <- RegisteredUsers.findWithUserId(uvo.intId, liveMeeting.registeredUsers)
+      } yield {
+        RegisteredUsers.updateUserRole(liveMeeting.registeredUsers, u, userRole)
+      }
+      val event = buildUserRoleChangedEvtMsg(liveMeeting.props.meetingProp.intId, msg.body.userId,
+        msg.body.changedBy, userRole)
+
+      outGW.send(event)
+>>>>>>> upstream/v2.0.x-release
     }
   }
 

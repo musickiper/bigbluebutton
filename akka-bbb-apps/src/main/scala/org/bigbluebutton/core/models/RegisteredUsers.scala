@@ -33,6 +33,7 @@ object RegisteredUsers {
     } yield user
   }
 
+<<<<<<< HEAD
   def updateRegUser(uvo: UserVO, users: RegisteredUsers) {
     for {
       ru <- RegisteredUsers.findWithUserId(uvo.id, users)
@@ -41,6 +42,8 @@ object RegisteredUsers {
     } yield users.save(regUser)
   }
 
+=======
+>>>>>>> upstream/v2.0.x-release
   def add(users: RegisteredUsers, user: RegisteredUser): Vector[RegisteredUser] = {
     users.save(user)
   }
@@ -52,6 +55,13 @@ object RegisteredUsers {
   def setWaitingForApproval(users: RegisteredUsers, user: RegisteredUser,
                             guestStatus: String): RegisteredUser = {
     val u = user.modify(_.guestStatus).setTo(guestStatus)
+    users.save(u)
+    u
+  }
+
+  def updateUserRole(users: RegisteredUsers, user: RegisteredUser,
+                     role: String): RegisteredUser = {
+    val u = user.modify(_.role).setTo(role)
     users.save(u)
     u
   }

@@ -3,21 +3,21 @@
 const C = require('../constants/Constants.js');
 const config = require('config');
 const mediaServerClient = require('kurento-client');
-const util = require('util');
 const EventEmitter = require('events').EventEmitter;
 const Logger = require('../../../utils/Logger');
+const isError = require('../utils/util').isError;
 
 let instance = null;
 
-/* Public members */
 module.exports = class MediaServer extends EventEmitter {
   constructor(serverUri) {
     if(!instance){
       super();
       this._serverUri = serverUri;
       this._mediaPipelines = {};
-      this._mediaElements= {};
+      this._mediaElements = {};
       this._mediaServer;
+      this._reconnectionRoutine = null;
       instance = this;
     }
 
@@ -25,53 +25,106 @@ module.exports = class MediaServer extends EventEmitter {
   }
 
   async init () {
-    if (typeof this._mediaServer === 'undefined' || !this._mediaServer) {
+    if (!this._mediaServer) {
       this._mediaServer = await this._getMediaServerClient(this._serverUri);
+      Logger.info("[mcs-media] Retrieved media server client => " + this._mediaServer);
+      this._monitorConnectionState();
     }
   }
 
   _getMediaServerClient (serverUri) {
     return new Promise((resolve, reject) =>  {
-      mediaServerClient(serverUri, (error, client) => {
+      mediaServerClient(serverUri, {failAfter: 1}, (error, client) => {
         if (error) {
-          reject(error);
+          error = this._handleError(error);
+          return reject(error);
         }
         resolve(client);
       });
     });
   }
 
-  _getMediaPipeline (conference) {
+  _monitorConnectionState () {
+    Logger.debug('[mcs-media] Monitoring connection state');
+    this._mediaServer.on('disconnect', this._onDisconnection.bind(this));
+    this._mediaServer.on('reconnected',this._onReconnection.bind(this));
+  }
+
+  _onDisconnection () {
+    Logger.error('[mcs-media] Media server was disconnected for some reason, will have to clean up all elements and notify users');
+    this._destroyElements();
+    this._destroyMediaServer();
+    this.emit(C.ERROR.MEDIA_SERVER_OFFLINE);
+    this._reconnectToServer();
+  }
+
+  _onReconnection (sameSession) {
+    if (!sameSession) {
+      Logger.info('[mcs-media] Media server is back online');
+      this.emit(C.EVENT.MEDIA_SERVER_ONLINE);
+    }
+  }
+
+  _reconnectToServer () {
+    if (!this._reconnectionRoutine) {
+      this._reconnectionRoutine = setInterval(async () => {
+        try {
+          this._mediaServer = await this._getMediaServerClient(this._serverUri);
+          this._monitorConnectionState();
+          clearInterval(this._reconnectionRoutine);
+          this._reconnectionRoutine = null;
+          Logger.warn("[mcs-media] Reconnection to media server succeeded");
+        }
+        catch (error) {
+          delete this._mediaServer;
+        }
+      }, 2000);
+    }
+  }
+
+
+  _getMediaPipeline (roomId) {
     return new Promise((resolve, reject) => {
-      if (this._mediaPipelines[conference]) {
-        Logger.warn('[mcs-media] Pipeline for', conference, ' already exists.');
-        resolve(this._mediaPipelines[conference]);
+      if (this._mediaPipelines[roomId]) {
+        Logger.warn('[mcs-media] Pipeline for', roomId, ' already exists.');
+        resolve(this._mediaPipelines[roomId]);
       }
       else {
         this._mediaServer.create('MediaPipeline', (error, pipeline) => {
           if (error) {
-            Logger.error('[mcs-media] Create MediaPipeline returned error', error);
+            error = this._handleError(error);
             reject(error);
           }
-          this._mediaPipelines[conference] = pipeline;
+          this._mediaPipelines[roomId] = pipeline;
+          pipeline.activeElements = 0;
           resolve(pipeline);
         });
       }
     });
   }
 
-  _releasePipeline (pipelineId) {
-    let mediaPipeline = this._mediaPipelines[pipelineId];
-
-    if (typeof mediaPipeline !== 'undefined' && typeof mediaPipeline.release === 'function') {
-      mediaElement.release();
-    }
+  _releasePipeline (room) {
+    return new Promise((resolve, reject) => {
+      Logger.debug("[mcs-media] Releasing room", room, "pipeline");
+      let pipeline = this._mediaPipelines[room];
+      if (pipeline && typeof pipeline.release === 'function') {
+        pipeline.release((error) => {
+          if (error) {
+            error = this._handleError(error);
+            return reject(error);
+          }
+          delete this._mediaPipelines[room];
+          return resolve()
+        });
+      }
+    });
   }
 
-  _createElement (pipeline, type) {
+  _createElement (pipeline, type, options) {
     return new Promise((resolve, reject) => {
-      pipeline.create(type, (error, mediaElement) => {
+      pipeline.create(type, options, (error, mediaElement) => {
         if (error) {
+          error = this._handleError(error);
           return reject(error);
         }
         Logger.info("[mcs-media] Created [" + type + "] media element: " + mediaElement.id);
@@ -82,14 +135,66 @@ module.exports = class MediaServer extends EventEmitter {
   }
 
 
-  async createMediaElement (conference, type) {
+  async createMediaElement (roomId, type, options = {}) {
+    options = options || {};
     try {
-      const pipeline = await this._getMediaPipeline(conference);
-      const mediaElement = await this._createElement(pipeline, type);
+      const pipeline = await this._getMediaPipeline(roomId);
+      const mediaElement = await this._createElement(pipeline, type, options);
+      if (typeof mediaElement.setKeyframeInterval === 'function' && options.keyframeInterval) {
+        Logger.debug("[mcs-media] Creating element with keyframe interval set to", options.keyframeInterval);
+        mediaElement.setKeyframeInterval(options.keyframeInterval);
+      }
+      this._mediaPipelines[roomId].activeElements++;
       return Promise.resolve(mediaElement.id);
     }
     catch (err) {
-      return Promise.reject(new Error(err));
+      return Promise.reject(err);
+    }
+  }
+
+  async startRecording (sourceId) {
+    let source = this._mediaElements[sourceId];
+
+    if (source) {
+      return new Promise((resolve, reject) => {
+        try {
+          source.record((err) => {
+            if (err) {
+              return reject(this._handleError(err));
+            }
+            return resolve();
+          });
+        }
+        catch (err) {
+          return reject(this._handleError(err));
+        }
+      });
+    }
+    else {
+      return Promise.reject("[mcs-recording] startRecording error");
+    }
+  }
+
+  async _stopRecording (sourceId) {
+    let source = this._mediaElements[sourceId];
+
+    if (source) {
+      return new Promise((resolve, reject) => {
+        try {
+          source.stopAndWait((err) => {
+            if (err) {
+              return reject(this._handleError(err));
+            }
+            return resolve();
+          });
+        }
+        catch (err) {
+          return reject(this._handleError(err));
+        }
+      });
+    }
+    else {
+      return Promise.reject("[mcs-recording] stopRecording error");
     }
   }
 
@@ -100,9 +205,10 @@ module.exports = class MediaServer extends EventEmitter {
     if (source && sink) {
       return new Promise((resolve, reject) => {
         switch (type) {
-          case 'ALL': 
+          case 'ALL':
             source.connect(sink, (error) => {
               if (error) {
+                error = this._handleError(error);
                 return reject(error);
               }
               return resolve();
@@ -111,46 +217,137 @@ module.exports = class MediaServer extends EventEmitter {
 
 
           case 'AUDIO':
+            source.connect(sink, 'AUDIO', (error) => {
+              if (error) {
+                error = this._handleError(error);
+                return reject(error);
+              }
+              return resolve();
+            });
+
           case 'VIDEO':
             source.connect(sink, (error) => {
               if (error) {
+                error = this._handleError(error);
                 return reject(error);
               }
               return resolve();
             });
             break;
 
-          default: return reject("[mcs-media] Invalid connect type");
+          default:
+            return this._handleError("[mcs-media] Invalid connect type");
         }
       });
     }
     else {
-      return Promise.reject("[mcs-media] Failed to connect " + type + ": " + sourceId + " to " + sinkId);
+      let error = this._handleError("[mcs-media] Failed to connect " + type + ": " + sourceId + " to " + sinkId);
+      return Promise.reject(error);
     }
   }
 
-  stop (elementId) {
-    let mediaElement = this._mediaElements[elementId];
-    if (typeof mediaElement !== 'undefined' && typeof mediaElement.release === 'function') {
-      Logger.info("[mcs-media] Releasing endpoint => " + elementId);
-      mediaElement.release();
-      this._mediaElements[elementId] = null;
+  async disconnect (sourceId, sinkId, type) {
+    let source = this._mediaElements[sourceId];
+    let sink = this._mediaElements[sinkId];
+
+    if (source && sink) {
+      return new Promise((resolve, reject) => {
+        switch (type) {
+          case 'ALL':
+            source.disconnect(sink, (error) => {
+              if (error) {
+                error = this._handleError(error);
+                return reject(error);
+              }
+              return resolve();
+            });
+            break;
+
+
+          case 'AUDIO':
+            source.disconnect(sink, 'AUDIO', (error) => {
+              if (error) {
+                error = this._handleError(error);
+                return reject(error);
+              }
+              return resolve();
+            });
+
+          case 'VIDEO':
+            source.disconnect(sink, (error) => {
+              if (error) {
+                error = this._handleError(error);
+                return reject(error);
+              }
+              return resolve();
+            });
+            break;
+
+          default:
+            return this._handleError("[mcs-media] Invalid connect type");
+        }
+      });
+    }
+    else {
+      let error = this._handleError("[mcs-media] Failed to connect " + type + ": " + sourceId + " to " + sinkId);
+      return Promise.reject(error);
     }
   }
 
-  
+  stop (room, type, elementId) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        Logger.info("[mcs-media] Releasing endpoint", elementId, "from room", room);
+        const mediaElement = this._mediaElements[elementId];
+        const pipeline = this._mediaPipelines[room];
+
+        if (type === 'RecorderEndpoint') {
+          await this._stopRecording(elementId);
+        }
+
+        if (mediaElement && typeof mediaElement.release === 'function') {
+          mediaElement.release(async (error) => {
+            if (error) {
+              error = this._handleError(error);
+              return reject(error);
+            }
+
+            delete this._mediaElements[elementId];
+
+            if (pipeline) {
+              pipeline.activeElements--;
+
+              Logger.info("[mcs-media] Pipeline has a total of", pipeline.activeElements, "active elements");
+              if (pipeline.activeElements <= 0) {
+                await this._releasePipeline(room);
+              }
+            }
+            return resolve();
+          });
+        }
+        else {
+          Logger.warn("[mcs-media] Media element", elementId, "could not be found to stop");
+          return resolve();
+        }
+      }
+      catch (err) {
+        err = this._handleError(err);
+        resolve();
+      }
+    });
+  }
+
   addIceCandidate (elementId, candidate) {
     let mediaElement = this._mediaElements[elementId];
     let kurentoCandidate = mediaServerClient.getComplexType('IceCandidate')(candidate);
 
-    if (typeof mediaElement !== 'undefined' && typeof mediaElement.addIceCandidate === 'function' &&
-        typeof candidate !== 'undefined') {
+    if (mediaElement  && candidate) {
       mediaElement.addIceCandidate(candidate);
       Logger.debug("[mcs-media] Added ICE candidate for => " + elementId);
       return Promise.resolve();
     }
     else {
-      return Promise.reject(new Error("Candidate could not be parsed or media element does not exist"));
+      return Promise.reject("Candidate could not be parsed or media element does not exist");
     }
   }
 
@@ -159,13 +356,14 @@ module.exports = class MediaServer extends EventEmitter {
     let mediaElement = this._mediaElements[elementId];
 
     return new Promise((resolve, reject) => {
-      if (typeof mediaElement !== 'undefined' && typeof mediaElement.gatherCandidates === 'function') {
+      if (mediaElement) {
         mediaElement.gatherCandidates((error) => {
           if (error) {
-            return reject(new Error(error));
+            error = this._handleError(error);
+            return reject(error);
           }
           Logger.info('[mcs-media] Triggered ICE gathering for ' + elementId);
-          return resolve(); 
+          return resolve();
         });
       }
       else {
@@ -177,7 +375,7 @@ module.exports = class MediaServer extends EventEmitter {
   setInputBandwidth (elementId, min, max) {
     let mediaElement = this._mediaElements[elementId];
 
-    if (typeof mediaElement !== 'undefined') {
+    if (mediaElement) {
       endpoint.setMinVideoRecvBandwidth(min);
       endpoint.setMaxVideoRecvBandwidth(max);
     } else {
@@ -188,7 +386,7 @@ module.exports = class MediaServer extends EventEmitter {
   setOutputBandwidth (endpoint, min, max) {
     let mediaElement = this._mediaElements[elementId];
 
-    if (typeof mediaElement !== 'undefined') {
+    if (mediaElement) {
       endpoint.setMinVideoSendBandwidth(min);
       endpoint.setMaxVideoSendBandwidth(max);
     } else {
@@ -199,7 +397,7 @@ module.exports = class MediaServer extends EventEmitter {
   setOutputBitrate (endpoint, min, max) {
     let mediaElement = this._mediaElements[elementId];
 
-    if (typeof mediaElement !== 'undefined') {
+    if (mediaElement) {
       endpoint.setMinOutputBitrate(min);
       endpoint.setMaxOutputBitrate(max);
     } else {
@@ -211,16 +409,17 @@ module.exports = class MediaServer extends EventEmitter {
     let mediaElement = this._mediaElements[elementId];
 
     return new Promise((resolve, reject) => {
-      if (typeof mediaElement !== 'undefined' && typeof mediaElement.processOffer === 'function') {
+      if (mediaElement) {
         mediaElement.processOffer(sdpOffer, (error, answer) => {
           if (error) {
+            error = this._handleError(error);
             return reject(error);
           }
           return resolve(answer);
         });
       }
       else {
-        return reject("[mcs-media] There is no element " + elementId);
+        return reject(this._handleError("[mcs-media] There is no element " + elementId));
       }
     });
   }
@@ -247,6 +446,9 @@ module.exports = class MediaServer extends EventEmitter {
         this.addMediaEventListener(C.EVENT.MEDIA_STATE.FLOW_OUT, elementId);
         break;
 
+      case C.MEDIA_TYPE.RECORDING:
+        break;
+
       default: return;
     }
     return;
@@ -255,7 +457,7 @@ module.exports = class MediaServer extends EventEmitter {
   addMediaEventListener (eventTag, elementId) {
     let mediaElement = this._mediaElements[elementId];
     // TODO event type validator
-    if (typeof mediaElement !== 'undefined' && mediaElement) {
+    if (mediaElement) {
       Logger.debug('[mcs-media] Adding media state listener [' + eventTag + '] for ' + elementId);
       mediaElement.on(eventTag, (event) => {
         if (eventTag === C.EVENT.MEDIA_STATE.ICE) {
@@ -268,5 +470,33 @@ module.exports = class MediaServer extends EventEmitter {
 
   notifyMediaState (elementId, eventTag, event) {
     this.emit(C.MEDIA_STATE.MEDIA_EVENT , {elementId, eventTag, event});
+  }
+
+  _destroyElements () {
+    for (var pipeline in this._mediaPipelines) {
+      if (this._mediaPipelines.hasOwnProperty(pipeline)) {
+        delete this._mediaPipelines[pipeline];
+      }
+    }
+
+    for (var element in this._mediaElements) {
+      if (this._mediaElements.hasOwnProperty(element)) {
+        delete this._mediaElements[element];
+      }
+    }
+  }
+
+  _destroyMediaServer() {
+    delete this._mediaServer;
+  }
+
+  _handleError(error) {
+    // Checking if the error needs to be wrapped into a JS Error instance
+    if (!isError(error)) {
+      error = new Error(error);
+    }
+
+    Logger.error('[mcs-media] Media Server returned an', error.message);
+    return error;
   }
 };

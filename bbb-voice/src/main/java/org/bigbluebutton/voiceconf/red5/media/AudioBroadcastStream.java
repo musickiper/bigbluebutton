@@ -55,11 +55,16 @@ public class AudioBroadcastStream implements IBroadcastStream, IProvider, IPipeC
 	// Codec handling stuff for frame dropping
 	private StreamCodecInfo streamCodecInfo;
 	private Long creationTime;
+<<<<<<< HEAD
 	/**
 	 * Timestamp the stream was started.
 	 */
 	private long startTime;
 
+=======
+	private Long startTime;
+  
+>>>>>>> upstream/v2.0.x-release
 	public AudioBroadcastStream(String name) {
 		publishedStreamName = name;
 		livePipe = null;
@@ -142,8 +147,13 @@ public class AudioBroadcastStream implements IBroadcastStream, IProvider, IPipeC
 
 	public void start() {
 		log.debug("Starting AudioBroadcastStream()");
+<<<<<<< HEAD
 		// technically this would be a 'start' time
 		startTime = System.currentTimeMillis();
+=======
+		creationTime = System.currentTimeMillis();
+		startTime = creationTime;
+>>>>>>> upstream/v2.0.x-release
 	}
 
 	public void stop() {
@@ -216,5 +226,9 @@ public class AudioBroadcastStream implements IBroadcastStream, IProvider, IPipeC
 
 	public long getCreationTime() {
 		return creationTime != null ? creationTime : 0L;
+	}
+
+	public long getStartTime() {
+		return startTime != null ? startTime : 0L;
 	}
 }
