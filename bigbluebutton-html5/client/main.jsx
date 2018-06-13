@@ -2,7 +2,7 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import { render } from 'react-dom';
-import { log } from '/imports/ui/services/api';
+import { log, makeCall } from '/imports/ui/services/api';
 import renderRoutes from '/imports/startup/client/routes';
 
 Meteor.startup(() => {
@@ -12,5 +12,14 @@ Meteor.startup(() => {
   // TODO: There is no StackTrace on the ErrorEvent object
   window.addEventListener('error', (e) => {
     log('error', e);
+  });
+
+  //
+  // /
+  window.addEventListener('message', function (e) {
+    if (e.data === 'c_record') {
+      console.dir(makeCall('toggleRecording'));
+      this.window.parent.postMessage({ response: 'recording start/stop' }, '*');
+    }
   });
 });
