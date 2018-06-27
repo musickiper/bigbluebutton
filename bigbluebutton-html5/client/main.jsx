@@ -15,6 +15,6 @@ Meteor.startup(() => {
     log('error', e);
   });
 
-  // /////
+  // For API
   test();
 });

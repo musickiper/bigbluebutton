@@ -1,14 +1,16 @@
 import Auth from '/imports/ui/services/auth';
 import Meetings from '/imports/api/meetings';
 import { makeCall } from '/imports/ui/services/api';
+// import KurentoBridge from '/imports/api/screenshare/client/bridge';
 
 export default function () {
   window.addEventListener('message', function (e) {
-    if (e.data === 'c_record') {
+    if (e.data === 'recToggle') {
       makeCall('toggleRecording');
-      console.dir(Meetings.findOne({ meetingId: Auth._meetingID }).recordProp);
-      // console.dir(Meetings.findOne({ meetingId: Auth.meetingID }).recordPro);
-      this.window.parent.postMessage({ response: 'recording start/stop' }, '*');
+      const recStart = !(Meetings.findOne({ meetingId: Auth._meetingID }).recordProp.recording);
+      this.window.parent.postMessage({ response: recStart ? 'Start Recording' : 'Stop Recording' }, '*');
+    } else if (e.data === 'srcShareToggle') {
+      // KurentoBridge.kurentoShareScreen();
     }
   });
 }
