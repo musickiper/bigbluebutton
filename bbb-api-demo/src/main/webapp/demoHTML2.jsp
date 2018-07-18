@@ -187,13 +187,7 @@ if (request.getParameterMap().isEmpty()) {
 	recButton.setAttribute("id","recButton");
 	recButton.setAttribute("onClick","recToggle();");
 
-	var screenShareButton = document.createElement("button");
-	screenShareButton.innerHTML = "Share Screen";
-	screenShareButton.setAttribute("id","screenShareButton");
-	screenShareButton.setAttribute("onClick","scrShareToggle();");
-
 	controls.appendChild(recButton);
-	controls.appendChild(screenShareButton);
 
 	//////////////////////////////////////////////////////////
 
